@@ -1,0 +1,22 @@
+{
+  "name": "youtube-faceless",
+  "version": "1.0.0",
+  "description": "Automates creation of YouTube Shorts from Reddit posts",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "upload-only": "node index.js --upload-only"
+  },
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.8.3",
+    "canvas": "^3.1.0",
+    "dotenv": "^16.4.7",
+    "fluent-ffmpeg": "^2.1.3",
+    "googleapis": "^146.0.0",
+    "openai": "^4.87.3",
+    "playht": "^0.16.0",
+    "puppeteer": "^24.4.0"
+  }
+}
