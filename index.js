@@ -18,9 +18,9 @@ PlayHT.init({
 });
 
 const subreddits = [
-  { name: "AmItheAsshole", sort: "top.json?t=all" },
-  { name: "relationshipadvice", sort: "top.json?t=all" },
-  { name: "relationship_advice", sort: "top.json?t=month" },
+  { name: "AmItheAsshole", sort: "top.json?t=day" },
+  { name: "relationship_advice", sort: "top.json?t=day" },
+  { name: "relationshipadvice", sort: "top.json?t=day" },
 ];
 const backgroundVideoPath = "./videoplayback.mp4";
 const cacheFilePath = "./shortTitleCache.json";
@@ -44,7 +44,7 @@ const ensureDir = (filePath) => {
 };
 
 const shortenTitle = async (title) => {
-  const prompt = `Shorten the following title while retaining its meaning and ensure that it is no more than 20 characters long. Return only the shortened title without any additional commentary: "${title}"`;
+  const prompt = `Shorten the following title while retaining its meaning and ensure that it is no more than 20 characters long. Return only the shortened title without any additional commentary and it must be in english: "${title}"`;
   console.log(`Shortening title: "${title}"`);
   try {
     const response = await openai.responses.create({
@@ -90,7 +90,7 @@ const fetchRedditPosts = async (subreddit, sort) => {
 };
 
 const correctText = async (text) => {
-  const prompt = `Correct the following text for spelling and grammar without changing any of the actual words, slang, abbreviations, or shorthand. Also add periods, punctuation, and new lines where needed to make it follow normal human speech patterns. Return only the corrected text without any commentary:\n\n${text}`;
+  const prompt = `Correct the following text for spelling and grammar without changing any of the actual words, slang, abbreviations, or shorthand. Also add periods, punctuation, and new lines where needed to make it follow normal human speech patterns. Return only the corrected text without any commentary and ensure its in english:\n\n${text}`;
   console.log("Correcting text...");
   try {
     const response = await openai.responses.create({
@@ -257,7 +257,7 @@ const generateDescription = async (
   shortTitle
 ) => {
   console.log(`Generating YouTube video description for: "${title}"`);
-  const prompt = `Based on the following title and post text, generate a concise and engaging description for a YouTube video. Return only the description text without any commentary.\n\nTitle: "${title}"\n\nPost Text: "${postText}"`;
+  const prompt = `Based on the following title and post text, generate a concise and engaging description for a YouTube video. Return only the description text without any commentary. \n\nTitle: "${title}"\n\nPost Text: "${postText}"`;
   try {
     const response = await openai.responses.create({
       model: "gpt-4o-mini",
@@ -270,7 +270,9 @@ const generateDescription = async (
       top_p: 1,
       store: true,
     });
-    const description = response.output_text;
+    const description =
+      response.output_text +
+      " #reddit #redditstories #askreddit #redditshorts #storytime #redditreads #redditdrama #redditconfessions #redditmemes #aita #amitheasshole #tifu #todayifuckedup #aita_reddit #tifu_reddit #redditfunny #funnyreddit #redditvideos #redditcompilation #storytelling #shortstory #shortstories #redditlife #relationshipsreddit #redditreactions #redditposts #redditrealstories #true_reddit_stories #creepyreddit #scaryreddit #relationshipadvice #crazyredditstories #redditthread #redditreadings #redditcommentary #youtubeShorts #shorts #shortsfeed #shortsvideo #viralshorts #foryou #fyp #redditseries #redditbased #redditcomedy #redditnight #redditrants #redditgold #reddituser #redditcrazy #weirdreddit #redditdramaqueen #entertainment #viralcontent #relatable #relatablereddit #redditvoiceover #texttospeech #redditaudio #dailyreddit #redditfun #popularreddit #interestingstories #bestofreddit #redditmix #redditreview #talesfromreddit #mysteryreddit #trendingstories #trendingreddit #redditdaily #reddittalk #redditreads #redditconfessions #redditgossip";
     const descriptionPath = `./${subredditFolder}/${sanitizeTitle(
       shortTitle
     )}/description/description.txt`;
@@ -565,15 +567,21 @@ const processPost = async (post, subredditFolder) => {
   // Skip posts with the word "update" in the title or post text
   if (
     postTitle.toLowerCase().includes("update") ||
-    postContent.toLowerCase().includes("update")
+    postContent.toLowerCase().includes("update") ||
+    postTitle.toLowerCase().includes("meta") ||
+    postContent.toLowerCase().includes("meta") ||
+    post.media_metadata ||
+    post.crosspost_parent_list
   ) {
-    console.log(`Skipping post "${postTitle}" due to presence of "update".`);
+    console.log(
+      `Skipping post "${postTitle}" due to presence of "update", "meta" or media or crosspost.`
+    );
     return;
   }
-  // Skip posts with more than 600 words in the post text
-  if (postContent.split(" ").length > 600) {
+  // Skip posts with less than 100 words in the post text
+  if (postContent.split(" ").length < 50) {
     console.log(
-      `Skipping post "${postTitle}" due to word count exceeding 600.`
+      `Skipping post "${postTitle}" due to word count less than 100.`
     );
     return;
   }
@@ -585,6 +593,7 @@ const processPost = async (post, subredditFolder) => {
 
   // Determine if we need to split the text into segments.
   const totalWords = correctedText.split(/\s+/).length;
+  let skipUpload = false;
   let segments = [];
   if (totalWords > 400) {
     segments = splitTextIntoSegments(correctedText, 150);
@@ -649,16 +658,24 @@ const processPost = async (post, subredditFolder) => {
       console.log(
         `Video segment already exists at ${outputVideoPath}. Skipping creation.`
       );
+      skipUpload = true;
     }
 
     // Optionally, upload each segment immediately.
     try {
-      await uploadToYouTube(
-        outputVideoPath,
-        `${shortTitle} ${
-          segments.length > 1 ? `- Part ${segmentIndex}` : ""
-        } #relationshipadvice #shorts #trending #viral`
-      );
+      if (!skipUpload) {
+        await uploadToYouTube(
+          outputVideoPath,
+          `${shortTitle} ${
+            segments.length > 1 ? `- Part ${segmentIndex}` : ""
+          } #relationshipadvice #shorts #trending #viral`
+        );
+      } else {
+        console.log(
+          `Skipping upload of video segment ${segmentIndex} due to skipUpload flag.`
+        );
+        skipUpload = false;
+      }
     } catch (error) {
       console.error(
         `Failed to upload video segment ${segmentIndex}:`,
@@ -672,8 +689,16 @@ const processSubreddits = async () => {
   for (const { name: subredditFolder, sort } of subreddits) {
     console.log(`Processing subreddit: r/${subredditFolder}`);
     const posts = await fetchRedditPosts(subredditFolder, sort);
+    let postsProcessed = 0; // Flag system: counter for posts processed
     for (const post of posts) {
+      if (postsProcessed >= 10) {
+        console.log(
+          `Reached maximum of 10 posts for r/${subredditFolder}. Skipping remaining posts.`
+        );
+        break; // Stop processing further posts for this subreddit
+      }
       await processPost(post, subredditFolder);
+      postsProcessed++; // Increment the counter after processing each post
     }
   }
 };
